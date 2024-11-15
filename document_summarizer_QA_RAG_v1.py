@@ -258,7 +258,6 @@ def summarize_map_reduce(chunks):
     output = summary_chain.invoke({'input_documents': chunks})
     return output
 
-
 if __name__ == "__main__":
 
     import os
