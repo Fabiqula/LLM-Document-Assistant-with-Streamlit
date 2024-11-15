@@ -1,3 +1,4 @@
+import time
 import streamlit as st
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.prompts import PromptTemplate
@@ -121,14 +122,14 @@ def create_embeddings(file_name, chunks, dimensions=1536):
     return vector_store
 
 
-def ask_and_get_answer(vector_store, q, chat_history=None, k=3):
+def ask_and_get_answer(vector_store, q, memory=None, k=3):
     """
     Ask a question and retrieve an answer based on document embeddings and chat history.
 
     Args:
         vector_store: The vector store containing document embeddings.
         q (str): The user's question.
-        chat_history (list): List of previous Q&A to provide context (default None).
+        memory (list): List of previous Q&A to provide context (default None).
         k (int): The number of relevant document chunks to retrieve (default 3).
 
     Returns:
@@ -146,7 +147,8 @@ def ask_and_get_answer(vector_store, q, chat_history=None, k=3):
         CONTEXT: {{context}}
         ----
         """
-    general_user_template = "Here is the next question, remember to only answer if you can from the provided context." \
+    general_user_template = "Here is the next question, remember to try answer if you can from the provided context" \
+                            " and if you cant use general knowledge, inform the user about the source." \
                             "Only respond in English. QUESTION:```{question}```"
 
     messages = [
@@ -163,7 +165,7 @@ def ask_and_get_answer(vector_store, q, chat_history=None, k=3):
         retriever=retriever,
         combine_docs_chain_kwargs={'prompt': qa_prompt}
     )
-    answer = crc.invoke({'question': q, 'chat_history': chat_history})
+    answer = crc.invoke({'question': q, 'chat_history': memory})
     return answer
 
 
@@ -206,11 +208,11 @@ def calculate_call_costs(texts, call_cost=None):
 
 def clear_history():
     """
-    Clears the chat history stored in the Streamlit session state.
+    Clears the chat history and llm memory stored in the Streamlit session state.
     """
     if 'history' in st.session_state:
-        del st.session_state['history']
-
+        st.session_state['history'] = []
+        st.session_state['memory'] = []
 
 def summarize_map_reduce(chunks):
     """
@@ -277,9 +279,23 @@ if __name__ == "__main__":
         st.session_state['history'] = []
     if 'memory' not in st.session_state:
         st.session_state['memory'] = []
+    if 'chunk_size' not in st.session_state:
+        st.session_state['chunk_size'] = 100
+    if 'k' not in st.session_state:
+        st.session_state['k'] = 3
+    if 'file_name' not in st.session_state:
+        st.session_state['file_name'] = ""
+
 
     st.image('img1.jpg')
     st.subheader('Summarize documents and ask LLM about it\'s contents.')
+
+    # Progress bar placeholder and initialization
+    progress_value = st.empty()
+    my_bar = st.progress(0, text='Progress Bar')
+    summary_progress = 4
+    llm_progress = 3
+    progress_messages = ''
 
     with st.sidebar:
         api_key = st.text_input('OpenAI API Key:', type='password')
@@ -290,11 +306,16 @@ if __name__ == "__main__":
         else:
             st.warning("Make sure to provide keys for both services")
 
-        uploaded_file = st.file_uploader('Upload a file:', type=['pdf', 'docx', 'txt'])
+        uploaded_file = st.file_uploader('Upload a file:', type=['pdf', 'docx', 'txt'], on_change=clear_history)
         chunk_size_summarization = st.number_input('Chunk Size Used for Summarization:', min_value=100,
                                                    max_value=15000, value=10000, on_change=clear_history)
         add_data_summarization = st.button('Add Data Used for Summarization', on_click=clear_history)
-        chunk_size = st.number_input('Chunk_size:', min_value=100, max_value=2048, value=512, on_change=clear_history)
+        chunk_size = st.number_input('Chunk_size:',
+                                     min_value=100,
+                                     max_value=2048,
+                                     value=512,
+                                     on_change=clear_history,
+                                     )
         k = st.number_input('k', min_value=1, max_value=20, value=3, on_change=clear_history)
         add_data = st.button('Add Data for LLM Questioning', on_click=clear_history)
         remove_data = st.button('Remove Loaded Files')
@@ -305,60 +326,105 @@ if __name__ == "__main__":
             if not uploaded_file:
                 st.warning(f'you need to load file first. Use Browse files button to load a file')
             else:
-                with st.spinner('Reading, and chunking chunk, chunk, chunk....'):
-                    bytes_data_sum = uploaded_file.read()
-                    file_name = os.path.join("./", uploaded_file.name)
-                    with open(file_name, 'wb') as f:
-                        f.write(bytes_data_sum)
+                bytes_data_sum = uploaded_file.read()
+                file_name = os.path.join("./", uploaded_file.name)
+                with open(file_name, 'wb') as f:
+                    f.write(bytes_data_sum)
 
-                    data_sum = load_document(file_name)
-                    chunks_sum = chunk_data_summarization(data_sum, chunk_size=chunk_size_summarization)
+                # loading a file and tracking progress.
+                data_sum = load_document(file_name)
+                my_bar.progress(1/summary_progress)
+                progress_messages += f"Progress 25%: File loaded\n"
+                progress_value.text(progress_messages)
+                time.sleep(0.5)
 
-                    st.write(f'Summarization chunk size: {chunk_size_summarization}, Chunks: {len(chunks_sum)}')
+                # chunking a file and tracking progress.
+                chunks_sum = chunk_data_summarization(data_sum, chunk_size=chunk_size_summarization)
+                my_bar.progress(2 / summary_progress)
+                progress_messages += f"Progress 50%: Summarization chunk size: {chunk_size_summarization}," \
+                                     f" Chunks: {len(chunks_sum)}\n"
+                progress_value.text(progress_messages)
+                time.sleep(0.5)
 
-                    tokens, call_cost = calculate_call_costs(chunks_sum)
-                    st.session_state['call_costs'] = call_cost
-                    st.write(f'No of tokens: {tokens}, Embedding cost: {call_cost:.4f}')
+                # calculating costs and tracking progress.
+                tokens, call_cost = calculate_call_costs(chunks_sum)
+                my_bar.progress(3 / summary_progress)
+                progress_messages += f"Progress 75%: No of tokens: {tokens}, Embedding cost: {call_cost:.4f}\n"
+                progress_value.text(progress_messages)
+                time.sleep(0.5)
 
-                    output = summarize_map_reduce(chunks_sum)
-                    st.session_state['output'] = output
-                    st.success(f'Summarization Complete')
+                # adding call costs to session_state
+                st.session_state['call_costs'] = call_cost
+
+                # generating summarization, updating session_state and tracking progress.
+                output = summarize_map_reduce(chunks_sum)
+                st.session_state['output'] = output
+                my_bar.progress(4 / summary_progress)
+                progress_messages += f"Progress 100%: Summarization generated"
+                progress_value.text(progress_messages)
 
         if add_data:
 
             if not uploaded_file:
                 st.warning(f'you need to load file first. Use Browse files button to load a file')
             else:
-                with st.spinner('Reading, chunking and embedding file...'):
-                    bytes_data = uploaded_file.read()
-                    file_name = os.path.join('./', uploaded_file.name)
-                    with open(file_name, 'wb') as f:
-                        f.write(bytes_data)
 
-                    data = load_document(file_name)
-                    chunks = chunk_data(data, chunk_size=chunk_size)
-                    st.write(f'Chunk size: {chunk_size}, Chunks: {len(chunks)}')
+                bytes_data = uploaded_file.read()
+                name, extension = os.path.splitext(uploaded_file.name)
+                uploaded_file = f"{name}-{chunk_size}-{k}{extension}"
 
-                    tokens, embedding_cost = calculate_embedding_cost(chunks)
-                    st.session_state['embedding_cost'] = embedding_cost
-                    st.write(f'Embedding cost: {embedding_cost:.4f}')
+                st.write(uploaded_file)
+                file_name = os.path.join('./', uploaded_file)
+                st.session_state['file_name'] = file_name
 
-                    if file_name in st.session_state['vector_stores']:
-                        vector_store = st.session_state['vector_stores'][file_name]
-                        st.write(f'Embedding already exists. Embedding cost: 0')
+                with open(file_name, 'wb') as f:
+                    f.write(bytes_data)
 
-                        st.success('File uploaded, chunked, and embedded successfully.')
+                data = load_document(file_name)
+                my_bar.progress(1 / summary_progress)
+                progress_messages += f"Progress 25%: File loaded.\n"
+                progress_value.text(progress_messages)
+                time.sleep(0.5)
 
-                    else:
-                        vector_store = create_embeddings(file_name, chunks)
-                        st.session_state['vector_stores'][file_name] = vector_store
-                        st.success('File uploaded, chunked, and embedded successfully.')
+                chunks = chunk_data(data, chunk_size=chunk_size)
+                my_bar.progress(2 / summary_progress)
+                progress_messages += f"Progress 50%: Chunk size: {chunk_size}, Chunks: {len(chunks)}.\n"
+                progress_value.text(progress_messages)
+                time.sleep(0.5)
+
+
+                tokens, embedding_cost = calculate_embedding_cost(chunks)
+                my_bar.progress(3 / summary_progress)
+                progress_messages += f"Progress 75%: Embedding cost: {embedding_cost:.4f}.\n"
+                progress_value.text(progress_messages)
+                time.sleep(0.5)
+                st.session_state['embedding_cost'] = embedding_cost
+
+
+                if file_name in st.session_state['vector_stores']:
+                    vector_store = st.session_state['vector_stores'][file_name]
+
+                    my_bar.progress(4 / summary_progress)
+                    progress_messages += f"Progress 100%: Pinecone Index already exists." \
+                                         f" Embedding cost: 0 file uploaded."
+
+                    progress_value.text(progress_messages)
+                    time.sleep(0.5)
+                    st.success('File uploaded, chunked, and embedded successfully.')
+
+                else:
+                    vector_store = create_embeddings(file_name, chunks)
+                    my_bar.progress(4 / summary_progress)
+                    progress_messages += f"Progress 100%: Pinecone Index created."
+                    progress_value.text(progress_messages)
+                    time.sleep(0.5)
+                    st.session_state['vector_stores'][file_name] = vector_store
 
         if remove_data:
-            file_name = os.path.join('./', uploaded_file.name)
+            file_name = st.session_state['file_name']
             if file_name in st.session_state['vector_stores']:
                 del st.session_state['vector_stores'][file_name]
-                st.success(f'Embeddings for file: {file_name} deleted')
+                st.success(f'file: {file_name} deleted')
 
             else:
                 st.warning(f"No embedding found")
@@ -368,14 +434,15 @@ if __name__ == "__main__":
         call_cost = st.session_state['call_costs']
         st.text(f'Cost of Summing the document: approx {call_cost} USD.')
 
-    file_name = uploaded_file.name if uploaded_file else "Your file"
+
 
     with st.form(key="my form", clear_on_submit=True):
-        q = st.text_input(f"Ask a question about the content of your file: {file_name}", key="user_question")
+        file_name = st.session_state['file_name']
+        q = st.text_input(f"Ask a question about the content of your file:{file_name}", key="user_question")
         submit_button = st.form_submit_button("Submit")
 
     if submit_button:
-        file_name = os.path.join('./', uploaded_file.name)
+        file_name = st.session_state['file_name']
         if file_name in st.session_state['vector_stores']:
 
             vector_store = st.session_state['vector_stores'][file_name]
