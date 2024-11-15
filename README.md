@@ -28,4 +28,45 @@ Frontend: Streamlit for user interface
 NLP: OpenAI's GPT-3.5-turbo for Q&A and summarization
 Vector Storage: Pinecone for scalable, fast embedding storage and retrieval
 LangChain: For chaining and processing document chunks
-This app is an ideal tool for users looking to gain insights from large documents and interact with content through conversational AI.
+This app is an ideal tool for users looking to gain insights from large documents and interact with content
+through conversational AI.
+
+## Requirements
+
+- Python 3.8+
+- Streamlit
+- OpenAI API (for embeddings and question answering)
+
+## Setup
+
+1. Clone the repository:
+    ```bash
+    git clone https://github.com/Fabiqula/LLM-Document-Assistant-with-Streamlit.git
+    cd LLM-Document-Assistant-with-Streamlit
+    ```
+
+2. Create a virtual environment and activate it:
+    - For Windows:
+      ```bash
+      python -m venv venv
+      .\venv\Scripts\activate
+      ```
+    - For Mac/Linux:
+      ```bash
+      python3 -m venv venv
+      source venv/bin/activate
+      ```
+
+3. Install dependencies:
+    ```bash
+    pip install -r requirements.txt
+    ```
+
+4. Set up the `.env` file:
+    - Copy the `.env.example` file and create a new file named `.env`.
+    - Add your API keys (e.g., OpenAI, Pinecone) to this file.
+
+5. Run the Streamlit app:
+    ```bash
+    streamlit run app.py
+    ```
