@@ -72,6 +72,7 @@ through conversational AI.
 
 
 5. Run the Streamlit app:
+    In terminal write:
     ```bash
-    streamlit run app.py
+    streamlit run document_summarizer_QA_RAG_v1.py  
     ```
