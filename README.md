@@ -1,6 +1,6 @@
 # LLM-Document-Assistant-with-Streamlit
 A Streamlit-based app for document summarization and Q&amp;A using OpenAI and Pinecone embeddings.
-Supports PDF, DOCX, and TXT files
+Supports PDF, DOCX, and TXT files. Open with Google Colab or Jupyter Notebook.
 
 Document Summarization and Q&A App
 This app is a Streamlit-based tool that enables summarization and question-answering on uploaded documents,
@@ -36,6 +36,8 @@ through conversational AI.
 - Python 3.8+
 - Streamlit
 - OpenAI API (for embeddings and question answering)
+- Pinceone API (for Pinecone Index)
+- 
 
 ## Setup
 
@@ -63,8 +65,11 @@ through conversational AI.
     ```
 
 4. Set up the `.env` file:
-    - Copy the `.env.example` file and create a new file named `.env`.
-    - Add your API keys (e.g., OpenAI, Pinecone) to this file.
+    - Create a new file named `.env`.
+    - Add your API keys to this file:
+        OPENAI_API_KEY='your-openai-api-key'
+        PINECONE_API_KEY='your-pinecone-api-key'.
+
 
 5. Run the Streamlit app:
     ```bash
