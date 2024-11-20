@@ -15,3 +15,4 @@ test - document_summarizer_QA_RAG_v1.2.py
 test.py
 the_great_gatsby-1500-5.docx
 the_great_gatsby.docx
+.env
